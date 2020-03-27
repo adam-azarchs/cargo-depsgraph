@@ -16,7 +16,7 @@ $ cargo-depsgraph -trim -dot \
     Cargo.lock | dot -Tsvg -o tenx_rust_toolbox.svg
 ```
 
-which renders as
+This renders as
 
 ![dependency graph](tenx_rust_toolbox.svg)
 
@@ -26,12 +26,44 @@ the graph each link to the appropriate page on
 simplify for example figuring out if there is a newer version of a crate
 which will allow dependencies to be shared better.
 
+For a summary report basically just listing the highlighted nodes which
+bring in extra versions of dependencies,
+```bash
+$ cargo-depsgraph Cargo.lock
+bio @ 0.29.0 brings in bytecount @ 0.6.0
+bio @ 0.29.0 brings in itertools @ 0.8.2
+cargo_metadata @ 0.6.4 brings in semver @ 0.9.0
+debruijn @ 0.3.0 brings in itertools @ 0.9.0
+debruijn @ 0.3.0 brings in smallvec @ 1.2.0
+mirror_sparse_matrix @ 0.1.0 brings in pretty_trace @ 0.1.7
+parking_lot_core @ 0.2.14 brings in rand @ 0.4.6
+parking_lot_core @ 0.2.14 brings in smallvec @ 0.6.13
+rand_chacha @ 0.1.1 brings in autocfg @ 0.1.7
+rand_chacha @ 0.1.1 brings in rand_core @ 0.3.1
+rand_jitter @ 0.1.4 brings in rand_core @ 0.4.2
+rand_os @ 0.1.3 brings in rand_core @ 0.4.2
+rand_pcg @ 0.1.2 brings in autocfg @ 0.1.7
+rand_pcg @ 0.1.2 brings in rand_core @ 0.4.2
+rustc_version @ 0.1.7 brings in semver @ 0.1.20
+skeptic @ 0.13.4 brings in bytecount @ 0.4.0
+snafu-derive @ 0.5.0 brings in proc-macro2 @ 0.4.30
+snafu-derive @ 0.5.0 brings in quote @ 0.6.13
+snafu-derive @ 0.5.0 brings in syn @ 0.15.44
+statrs @ 0.11.0 brings in rand @ 0.6.5
+stirling_numbers @ 0.1.1 brings in rand @ 0.5.6
+vdj_ann @ 0.1.0 brings in itertools @ 0.8.2
+vdj_ann @ 0.1.0 brings in pretty_trace @ 0.3.0
+wyhash @ 0.3.0 brings in rand_core @ 0.4.2
+```
+These listed packages are good places to start looking at, to figure out
+what updates would be most helpful for reducing dependency bloat.
+
 ### Color key
 Terminology:
 * Multi-version crate: a crate for which multiple versions of the same
   crate exist in the dependency graph.
 * Majority/minority version: For a multi-version crate, the version with
-  the greatest/least number of other crates depending on it.
+  the greatest/not-greatest number of other crates depending on it.
 
 #### Nodes
 * Red: Nodes for multi-version crates, unless they are in the transitive
@@ -49,9 +81,9 @@ Terminology:
 
 #### Edges
 * Orange: Edges from a crate that is in the transitive dependencies of a
-  multi-version crate to another mutli-version crate.
+  multi-version crate to another multi-version crate.
 * Red: Edges from a single-version crate to a multi-version crate that is
-  not at the majority version, if the starting node is not in the transtive
+  not at the majority version, if the starting node is not in the transitive
   dependencies of a multi-version crate.
 * Blue: Edges from a single-version crate to the majority version of a
   multi-version crate, or from a multi-version crate to a single-version
