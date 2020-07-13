@@ -149,6 +149,7 @@ func loadCrates(filename string) ([]*Package, error) {
 
 func main() {
 	var dot, trim bool
+	var ignoreStr string
 	flag.BoolVar(&dot, "dot", false,
 		"Render deps graph in dot format.")
 	flag.BoolVar(&trim, "trim", false,
@@ -158,12 +159,21 @@ func main() {
 	flag.StringVar(&baseurl, "baseurl", "",
 		"A `url` prefix to use for making hyperlinks for packages in this "+
 			"workspace, e.g. https://github.com/<org>/<repo>/blob/master/")
+	flag.StringVar(&ignoreStr, "ignore", "",
+		"A comma-separated `list` of crates to ignore.")
 	flag.Parse()
 	pkgs, err := loadCrates(flag.Arg(0))
 	if err != nil {
 		panic(err.Error())
 	}
 	pkgMap := makePkgMap(pkgs)
+	var ignoreList []string
+	if ignoreStr := strings.TrimSpace(ignoreStr); ignoreStr != "" {
+		ignoreList = strings.Split(ignoreStr, ",")
+	}
+	if len(ignoreList) > 0 {
+		pkgs = trimIgnore(pkgMap, pkgs, ignoreList)
+	}
 	if trim {
 		pkgs = trimPkgs(pkgMap, pkgs)
 	}
@@ -241,6 +251,55 @@ func makePkgMap(pkgList []*Package) map[string]map[string]*Package {
 		}
 	}
 	return pkgs
+}
+
+func trimIgnore(pkgs map[string]map[string]*Package, pkgList []*Package, ignore []string) []*Package {
+	depends := make(map[string]int, len(pkgList))
+	for _, pkg := range pkgList {
+		for _, dep := range pkg.Deps {
+			depends[dep.Name]++
+		}
+	}
+	anyChange := false
+	for i := 0; i < len(ignore); i++ {
+		for _, pkg := range pkgs[ignore[i]] {
+			anyChange = true
+			for _, dep := range pkg.Deps {
+				c := depends[dep.Name]
+				if c == 1 {
+					fmt.Fprintln(os.Stderr, dep.Name, "is only used by ignored crates")
+					ignore = append(ignore, dep.Name)
+				}
+				depends[dep.Name] = c - 1
+			}
+		}
+		delete(pkgs, ignore[i])
+	}
+	if !anyChange {
+		return pkgList
+	}
+	for _, pkg := range pkgList {
+		if pkgs[pkg.Name] != nil {
+			// Remove trimmed deps from kept packages.
+			newDeps := make([]Dep, 0, len(pkg.Deps))
+			for _, dep := range pkg.Deps {
+				dv := pkgs[dep.Name]
+				if len(dv) > 0 {
+					newDeps = append(newDeps, dep)
+				}
+			}
+			if len(newDeps) != len(pkg.Deps) {
+				pkg.Deps = newDeps
+			}
+		}
+	}
+	newPkgs := make([]*Package, 0, (len(pkgList)+len(pkgs))/2)
+	for _, pkg := range pkgList {
+		if pkgs[pkg.Name][pkg.Ver] != nil {
+			newPkgs = append(newPkgs, pkg)
+		}
+	}
+	return newPkgs
 }
 
 func trimPkgs(pkgs map[string]map[string]*Package, pkgList []*Package) []*Package {
